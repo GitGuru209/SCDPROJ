@@ -1,18 +1,51 @@
 name: Build and Deploy
+
 on: [push]
+
 jobs:
   build-deploy:
     runs-on: self-hosted
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
+
+      - name: Debug Docker Hub Username
+        shell: pwsh
+        run: |
+          echo "Attempting to login as: ${{ secrets.DOCKER_USERNAME }}"
+
+      - name: Clean Docker Config
+        shell: pwsh
+        run: |
+          Remove-Item -Path "$HOME\.docker\config.json" -ErrorAction SilentlyContinue
+          echo "Docker config cleared"
+
       - name: Log in to Docker Hub
-        run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+        shell: pwsh
+        run: |
+          $password = "${{ secrets.DOCKER_PASSWORD }}"
+          $password = $password -replace '([!$])', '`$1'
+          echo "$password" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+          echo "Login command executed"
+
+      - name: Verify Docker Login
+        shell: pwsh
+        run: |
+          Get-Content "$HOME\.docker\config.json"
+          docker info | Select-String "Username"
+
       - name: Build and Push Docker Image
+        shell: pwsh
         run: |
           docker build -t faizz209/my-app:latest .
           docker push faizz209/my-app:latest
+          echo "Image pushed successfully"
+
       - name: Deploy to Minikube
+        shell: pwsh
         run: |
           kubectl apply -f deployment.yaml
           kubectl apply -f service.yaml
+          kubectl get pods
+          echo "Deployment completed"
