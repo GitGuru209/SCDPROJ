@@ -9,35 +9,32 @@ jobs:
 
       - name: Debug Environment
         run: |
-          echo "Runner OS: $env:RUNNER_OS"
+          echo "Runner OS: Windows (self-hosted)"
           echo "Docker version: $(docker --version)"
-          echo "kubectl version: $(kubectl version --client --short)"
+          echo "kubectl client version: $(kubectl version --client --output=json | ConvertFrom-Json).clientVersion.gitVersion"
 
       - name: Validate Secrets Exist
         run: |
           if (-not "${{ secrets.DOCKER_USERNAME }}") { 
-            echo "ERROR: DOCKER_USERNAME secret is empty!" 
+            Write-Error "DOCKER_USERNAME secret is empty!"
             exit 1
           }
-          echo "DOCKER_USERNAME secret exists (value hidden for security)"
-          echo "DOCKER_PASSWORD secret exists (value hidden for security)"
+          echo "DOCKER_USERNAME secret exists (value hidden)"
+          echo "DOCKER_PASSWORD secret exists (value hidden)"
 
       - name: Clean Docker Config
         run: |
           Remove-Item -Path ~/.docker/config.json -ErrorAction SilentlyContinue
-          echo "Cleared any existing Docker credentials"
+          echo "Cleared existing Docker credentials"
 
       - name: Log in to Docker Hub
         run: |
-          $loginOutput = $(echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" docker.io --password-stdin 2>&1)
+          $password = "${{ secrets.DOCKER_PASSWORD }}"
+          $password = $password -replace '([!$])', '`$1'  # Escape special chars
+          $loginOutput = $(echo "${password}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" docker.io --password-stdin 2>&1)
           if ($LASTEXITCODE -ne 0) {
-            echo "Docker login failed with output:"
-            echo $loginOutput
-            echo "Troubleshooting:"
-            echo "1. Verify Docker Hub token has 'Read & Write' permissions"
-            echo "2. Check for special characters in credentials"
-            echo "3. Ensure secrets are properly set in GitHub"
-            exit 1
+              Write-Error "Docker login failed: $loginOutput"
+              exit 1
           }
           echo "Docker login succeeded"
 
@@ -45,13 +42,13 @@ jobs:
         run: |
           docker build -t faizz209/my-app:latest .
           docker push faizz209/my-app:latest
-          echo "Successfully built and pushed image"
+          echo "Image successfully pushed to Docker Hub"
 
       - name: Deploy to Minikube
         run: |
           kubectl apply -f deployment.yaml
           kubectl apply -f service.yaml
-          echo "Current deployments:"
-          kubectl get deployments
-          echo "Current pods:"
-          kubectl get pods
+          echo "Deployment status:"
+          kubectl get deployments,services,pods
+          echo "Minikube service URL:"
+          minikube service my-app-service --url
