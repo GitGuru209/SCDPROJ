@@ -11,7 +11,7 @@ jobs:
       - name: Build and Push Docker Image
         run: |
           docker build -t faizz209/my-app:latest .
-          docker push <your-dockerhub-username>/my-app:latest
+          docker push faizz209/my-app:latest
       - name: Deploy to Minikube
         run: |
           kubectl apply -f deployment.yaml
